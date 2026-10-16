@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+uploads/*
+!uploads/.gitkeep
+outputs/*
+!outputs/.gitkeep
+browser_profile/
+test_proxy_*
