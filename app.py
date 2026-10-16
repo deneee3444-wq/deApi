@@ -26,12 +26,35 @@ os.makedirs(OUTPUTS_DIR, exist_ok=True)
 print("[*] BrowserManager başlatılıyor...", flush=True)
 browser_manager = BrowserManager()
 
-# Bellek içi iş takip sözlüğü
+# Sunucu taraflı runtime bellek (sayfa yenilendiğinde kaybolmaması için)
+RUNTIME_STATE = {
+    "last_api_key": ""
+}
 JOBS = {}
 
 @app.route("/")
 def index():
     return render_template("index.html")
+
+@app.route("/api/state", methods=["GET"])
+def api_get_state():
+    """Sayfa yenilendiğinde mevcut API key ve tüm iş geçmişini döndürür."""
+    # En yeniden en eskiye sırala
+    job_list = sorted(list(JOBS.values()), key=lambda x: x.get("created_at_ts", 0), reverse=True)
+    return jsonify({
+        "success": True,
+        "api_key": RUNTIME_STATE.get("last_api_key", ""),
+        "jobs": job_list
+    })
+
+@app.route("/api/set-key", methods=["POST"])
+def api_set_key():
+    """Kullanıcı input'a key yazdığında runtime belleğine kaydeder."""
+    data = request.json or {}
+    key = data.get("api_key", "").strip()
+    if key:
+        RUNTIME_STATE["last_api_key"] = key
+    return jsonify({"success": True})
 
 @app.route("/api/create-account", methods=["POST"])
 def api_create_account():
@@ -41,6 +64,8 @@ def api_create_account():
     """
     try:
         new_key = deapi_engine.create_new_account_key(browser_manager)
+        if new_key:
+            RUNTIME_STATE["last_api_key"] = new_key
         return jsonify({"success": True, "api_key": new_key})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -49,13 +74,15 @@ def api_create_account():
 def api_models():
     api_key = request.args.get("api_key", "").strip()
     if not api_key:
+        api_key = RUNTIME_STATE.get("last_api_key", "")
+    if not api_key:
         return jsonify({"success": False, "error": "API Key gerekli"}), 400
     models = deapi_engine.fetch_models(api_key)
     return jsonify({"success": True, "models": models})
 
 @app.route("/api/model-info", methods=["GET"])
 def api_model_info():
-    api_key = request.args.get("api_key", "").strip()
+    api_key = request.args.get("api_key", "").strip() or RUNTIME_STATE.get("last_api_key", "")
     model_slug = request.args.get("model", "").strip()
     if not api_key or not model_slug:
         return jsonify({"success": False, "error": "api_key ve model parametreleri gerekli"}), 400
@@ -65,7 +92,7 @@ def api_model_info():
 @app.route("/api/estimate-price", methods=["POST"])
 def api_estimate_price():
     data = request.json or {}
-    api_key = data.get("api_key", "").strip()
+    api_key = data.get("api_key", "").strip() or RUNTIME_STATE.get("last_api_key", "")
     if not api_key:
         return jsonify({"success": False, "error": "API Key gerekli"}), 400
 
@@ -110,6 +137,25 @@ def _background_job_worker(job_id, api_key, payload, file_paths):
         JOBS[job_id]["status"] = "processing"
         JOBS[job_id]["progress"] = 10.0
 
+        def _extract_url(job_info):
+            """deAPI yanıtındaki result_url veya alternatif result alanlarını güvenle tarar."""
+            if not job_info:
+                return None
+            u = job_info.get("result_url")
+            if u and isinstance(u, str) and u.startswith("http"):
+                return u
+            res = job_info.get("result")
+            if res and isinstance(res, str) and res.startswith("http"):
+                return res
+            if isinstance(res, dict):
+                u2 = res.get("url") or res.get("video_url")
+                if u2 and isinstance(u2, str) and u2.startswith("http"):
+                    return u2
+            v_u = job_info.get("video_url")
+            if v_u and isinstance(v_u, str) and v_u.startswith("http"):
+                return v_u
+            return None
+
         # Takip döngüsü (Polling)
         while True:
             time.sleep(3)
@@ -122,7 +168,15 @@ def _background_job_worker(job_id, api_key, payload, file_paths):
             JOBS[job_id]["status"] = status
 
             if status == "done":
-                result_url = info.get("result_url")
+                # deAPI CDN / S3 yükleme gecikmesi için result_url dolana kadar en fazla 24 saniye bekle
+                result_url = _extract_url(info)
+                retries = 0
+                while not result_url and retries < 12:
+                    time.sleep(2)
+                    retries += 1
+                    sub_info = deapi_engine.check_job_status(api_key, request_id)
+                    result_url = _extract_url(sub_info)
+
                 if result_url:
                     filename = f"video_{request_id[:8]}_{int(time.time())}.mp4"
                     save_path = os.path.join(OUTPUTS_DIR, filename)
@@ -133,7 +187,7 @@ def _background_job_worker(job_id, api_key, payload, file_paths):
                     JOBS[job_id]["filename"] = filename
                 else:
                     JOBS[job_id]["status"] = "error"
-                    JOBS[job_id]["error"] = "Result URL bulunamadı."
+                    JOBS[job_id]["error"] = "Video üretildi fakat indirme bağlantısı (result_url) CDN tarafından zamanında sağlanamadı."
                 break
             elif status == "error":
                 JOBS[job_id]["status"] = "error"
@@ -146,9 +200,11 @@ def _background_job_worker(job_id, api_key, payload, file_paths):
 
 @app.route("/api/generate", methods=["POST"])
 def api_generate():
-    api_key = request.form.get("api_key", "").strip()
+    api_key = request.form.get("api_key", "").strip() or RUNTIME_STATE.get("last_api_key", "")
     if not api_key:
         return jsonify({"success": False, "error": "API Key gerekli"}), 400
+
+    RUNTIME_STATE["last_api_key"] = api_key
 
     prompt = request.form.get("prompt", "").strip()
     if not prompt:
@@ -229,7 +285,6 @@ def api_generate():
             file_paths["last_frame"] = fpath
 
     elif mode == "reference":
-        # Birden fazla ref_images yüklenebilir
         ref_imgs = request.files.getlist("ref_images")
         for img in ref_imgs:
             if img and img.filename:
@@ -238,7 +293,6 @@ def api_generate():
                 img.save(fpath)
                 file_paths["ref_images"].append(fpath)
 
-        # Referans video(lar)
         ref_vids = request.files.getlist("ref_videos")
         for vid in ref_vids:
             if vid and vid.filename:
@@ -247,7 +301,6 @@ def api_generate():
                 vid.save(fpath)
                 file_paths["ref_videos"].append(fpath)
 
-        # Referans ses(ler)
         ref_auds = request.files.getlist("ref_audios")
         for aud in ref_auds:
             if aud and aud.filename:
@@ -262,14 +315,19 @@ def api_generate():
         if file_paths["ref_audios"] and not (file_paths["ref_images"] or file_paths["ref_videos"]):
             return jsonify({"success": False, "error": "Ses referansı tek başına kullanılamaz! Yanında en az bir resim veya video referansı olmalıdır."}), 400
 
+    now = datetime.now()
     job_id = uuid.uuid4().hex
     JOBS[job_id] = {
         "id": job_id,
+        "prompt": prompt,
+        "model": model,
+        "mode": mode,
         "status": "queued",
         "progress": 0.0,
         "video_url": None,
         "error": None,
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "created_at": now.strftime("%H:%M:%S"),
+        "created_at_ts": now.timestamp()
     }
 
     t = threading.Thread(
