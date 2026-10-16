@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="tr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>deAPI.ai Video Stüdyosu</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              400: '#fbbf24',
+              500: '#f59e0b',
+              600: '#d97706',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background-color: #0b0d10; color: #e2e8f0; }
+    .glass { background: rgba(18, 22, 28, 0.85); backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .input-box { background: #13171f; border: 1px solid #28303d; color: #f0f6fc; transition: border-color 0.15s ease; }
+    .input-box:focus { border-color: #f59e0b; outline: none; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans">
+
+  <!-- Üst Bar -->
+  <header class="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-300 flex items-center justify-center font-black text-zinc-950 text-xl shadow-lg shadow-amber-500/20">
+          ▶
+        </div>
+        <div>
+          <span class="text-lg font-bold tracking-tight text-white">deAPI <span class="text-amber-400">Studio</span></span>
+          <span class="ml-2 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">v2 Full API</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-4 text-xs">
+        <div class="flex items-center gap-2 text-zinc-400">
+          <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>Arka Plan Tarayıcısı Aktif</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Ana İçerik -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- 1. API KEY YÖNETİM ALANI -->
+    <section class="glass rounded-2xl p-5 shadow-lg">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex-1 w-full">
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Aktif API Anahtarı</label>
+            <span class="text-[11px] text-zinc-500">Hesaba $5.00 ücretsiz bakiye dahildir</span>
+          </div>
+          <div class="relative">
+            <input type="text" id="apiKeyInput" oninput="onApiKeyChange()" placeholder="API Anahtarınızı yapıştırın veya butona basarak otomatik açın..." class="w-full input-box px-3.5 py-2.5 rounded-xl text-sm font-mono text-amber-300 placeholder:text-zinc-600">
+          </div>
+        </div>
+        <div class="flex items-center gap-3 w-full md:w-auto pt-2 md:pt-5">
+          <button id="btnCreateAccount" onclick="generateNewAccount()" class="w-full md:w-auto px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20">
+            <svg id="accSpinner" class="hidden animate-spin h-4 w-4 text-zinc-950" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span id="btnAccText">+ Otomatik $5 Kredili Hesap Aç</span>
+          </button>
+        </div>
+      </div>
+      <div id="accountStatus" class="mt-2 text-xs text-zinc-400 hidden"></div>
+    </section>
+
+    <!-- 2. VİDEO STÜDYOSU (İKİ SÜTUN) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- Sol Sütun: Ayarlar & Girdiler -->
+      <div class="lg:col-span-7 space-y-6">
+
+        <!-- Model ve Mod Kartı -->
+        <div class="glass rounded-2xl p-5 space-y-5">
+          
+          <!-- Model Seçimi -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Model Seçimi</label>
+              <button onclick="refreshModelsList()" class="text-[11px] text-amber-400 hover:underline">Modelleri Yenile</button>
+            </div>
+            <select id="modelSelect" onchange="onModelChange()" class="w-full input-box rounded-xl px-3 py-2.5 text-sm font-medium">
+              <option value="MiniMaxH3_33B_Turbo_INT8" selected>MiniMax H3 33B Turbo INT8 (Önerilen)</option>
+              <option value="Ltx2_5_22B_Dist_INT8">LTX-2.5 22B Distilled INT8</option>
+              <option value="Ltx2_3_22B_Dist_INT8">LTX-2.3 22B Distilled INT8</option>
+              <option value="Ltxv_13B_0_9_8_Distilled_FP8">LTX-Video-0.9.8 13B</option>
+            </select>
+          </div>
+
+          <!-- Üretim Modu Sekmeleri (Text vs Keyframe vs Full Reference) -->
+          <div>
+            <label class="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">Girdi & Üretim Modu</label>
+            <div class="grid grid-cols-3 gap-2 p-1 bg-zinc-950/60 rounded-xl border border-zinc-800">
+              <button type="button" onclick="setMode('t2v')" id="tab_t2v" class="py-2.5 text-xs font-bold rounded-lg transition text-zinc-400 hover:text-white">Text-to-Video</button>
+              <button type="button" onclick="setMode('keyframe')" id="tab_keyframe" class="py-2.5 text-xs font-bold rounded-lg bg-amber-500 text-zinc-950 shadow transition">Keyframe (Kare)</button>
+              <button type="button" onclick="setMode('reference')" id="tab_reference" class="py-2.5 text-xs font-bold rounded-lg transition text-zinc-400 hover:text-white">Full-Reference</button>
+            </div>
+            <p id="modeDescription" class="mt-2 text-[11px] text-zinc-500">İlk kare veya ilk+son kare resimleri vererek arayı hareketlendirin.</p>
+          </div>
+
+          <!-- 1. KEYFRAME MODU DOSYALARI -->
+          <div id="keyframeArea" class="space-y-3 pt-2">
+            <div>
+              <label class="block text-xs font-semibold text-zinc-300 mb-1">İlk Kare Resmi (First Frame - Zorunlu) *</label>
+              <input type="file" id="firstFrameInput" accept="image/*" class="w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-zinc-300 mb-1">Son Kare Resmi (Last Frame - Opsiyonel)</label>
+              <input type="file" id="lastFrameInput" accept="image/*" class="w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer">
+            </div>
+          </div>
+
+          <!-- 2. FULL REFERENCE MODU DOSYALARI -->
+          <div id="referenceArea" class="space-y-3 pt-2 hidden">
+            <div class="p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-1">
+              <span class="text-xs font-semibold text-amber-400">💡 İpucu: Prompt Etiketleri</span>
+              <p class="text-[11px] text-zinc-400">Referans dosyalarınızı prompt içinde tanımlamak için etiketleri kullanın:</p>
+              <div class="flex flex-wrap gap-1.5 pt-1">
+                <button type="button" onclick="appendPromptTag('&lt;Picture 1&gt;')" class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 text-[10px] font-mono border border-zinc-700">+ &lt;Picture 1&gt;</button>
+                <button type="button" onclick="appendPromptTag('&lt;Picture 2&gt;')" class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 text-[10px] font-mono border border-zinc-700">+ &lt;Picture 2&gt;</button>
+                <button type="button" onclick="appendPromptTag('&lt;Video 1&gt;')" class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 text-[10px] font-mono border border-zinc-700">+ &lt;Video 1&gt;</button>
+                <button type="button" onclick="appendPromptTag('&lt;Audio 1&gt;')" class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 text-[10px] font-mono border border-zinc-700">+ &lt;Audio 1&gt;</button>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-zinc-300 mb-1">Referans Resim(ler) (1-3 Resim, Çoklu seçim yapılabilir)</label>
+              <input type="file" id="refImagesInput" accept="image/*" multiple class="w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-zinc-300 mb-1">Referans Video (Kamera & Hareket - MP4/MOV)</label>
+              <input type="file" id="refVideoInput" accept="video/*" class="w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-zinc-300 mb-1">Referans Ses (Konuşma/Müzik - MP3/WAV/M4A)</label>
+              <input type="file" id="refAudioInput" accept="audio/*" class="w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer">
+              <span class="text-[10px] text-zinc-500">Not: deAPI kuralı gereği ses referansı sadece en az 1 resim veya video ile birlikte çalışır.</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Prompt ve Ayarlar -->
+        <div class="glass rounded-2xl p-5 space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Video İstemi (Prompt) *</label>
+            <textarea id="promptInput" rows="3" placeholder="Videonuzda ne olmasını istiyorsunuz? (Örn: A high quality cinematic shot with natural smooth motion)" class="w-full input-box rounded-xl p-3 text-sm resize-none"></textarea>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Negatif İstem (Negative Prompt - Opsiyonel)</label>
+            <input type="text" id="negativePromptInput" placeholder="Görünmesini istemediğiniz detaylar (blur, watermark, distorted, low quality)" class="w-full input-box rounded-xl px-3 py-2 text-xs">
+          </div>
+          <div class="flex items-center gap-2.5 pt-1">
+            <input type="checkbox" id="enhancePrompt" class="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 bg-zinc-800 border-zinc-700">
+            <label for="enhancePrompt" class="text-xs text-zinc-300 cursor-pointer select-none">Prompt Booster (deAPI otomatik prompt zenginleştirici)</label>
+          </div>
+        </div>
+
+        <!-- Çözünürlük, Kare ve Gelişmiş Parametreler -->
+        <div class="glass rounded-2xl p-5 space-y-4">
+          <label class="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Çözünürlük, Kare ve Gelişmiş Ayarlar</label>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <label class="block text-xs text-zinc-400 mb-1">Genişlik (W)</label>
+              <input type="number" id="widthInput" value="1024" step="16" class="w-full input-box rounded-xl px-3 py-2 text-sm text-center font-mono">
+            </div>
+            <div>
+              <label class="block text-xs text-zinc-400 mb-1">Yükseklik (H)</label>
+              <input type="number" id="heightInput" value="576" step="16" class="w-full input-box rounded-xl px-3 py-2 text-sm text-center font-mono">
+            </div>
+            <div>
+              <label class="block text-xs text-zinc-400 mb-1">Kare (Frames)</label>
+              <input type="number" id="framesInput" value="243" class="w-full input-box rounded-xl px-3 py-2 text-sm text-center font-mono">
+            </div>
+            <div>
+              <label class="block text-xs text-zinc-400 mb-1">Kare Hızı (FPS)</label>
+              <input type="number" id="fpsInput" value="24" class="w-full input-box rounded-xl px-3 py-2 text-sm text-center font-mono">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <div>
+              <label class="block text-xs text-zinc-400 mb-1">Seed (-1 rastgele)</label>
+              <input type="number" id="seedInput" value="-1" class="w-full input-box rounded-xl px-3 py-2 text-xs text-center font-mono">
+            </div>
+            <div>
+              <label class="block text-xs text-zinc-400 mb-1">Steps (Adım - Opsiyonel)</label>
+              <input type="number" id="stepsInput" placeholder="Model Varsayılanı" class="w-full input-box rounded-xl px-3 py-2 text-xs text-center font-mono">
+            </div>
+            <div>
+              <label class="block text-xs text-zinc-400 mb-1">Guidance / CFG (Opsiyonel)</label>
+              <input type="number" step="0.5" id="guidanceInput" placeholder="Model Varsayılanı" class="w-full input-box rounded-xl px-3 py-2 text-xs text-center font-mono">
+            </div>
+          </div>
+        </div>
+
+        <!-- Üretim Butonu & Canlı Maliyet -->
+        <div class="glass rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div class="text-xs text-zinc-400">
+            <div class="flex items-center gap-1.5">
+              <span>Tahmini Maliyet:</span>
+              <span id="costDisplay" class="font-bold text-amber-400 text-sm">Hesaplanıyor...</span>
+            </div>
+            <div class="text-[11px] text-zinc-500">Üretim süresi modele ve parametrelere göre 1-3 dakika sürebilir.</div>
+          </div>
+          <button id="btnGenerate" onclick="startGeneration()" class="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25">
+            <svg id="genSpinner" class="hidden animate-spin h-5 w-5 text-zinc-950" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span id="btnGenText">Videoyu Üret</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Sağ Sütun: Canlı İlerleme ve Video Oynatıcı -->
+      <div class="lg:col-span-5 space-y-6">
+
+        <div class="glass rounded-2xl p-6 min-h-[500px] flex flex-col justify-center items-center text-center relative overflow-hidden">
+          
+          <!-- Boşta Durum -->
+          <div id="idleState" class="space-y-3">
+            <div class="w-16 h-16 rounded-2xl bg-zinc-800/80 border border-zinc-700/50 flex items-center justify-center mx-auto text-zinc-500 text-2xl">
+              🎬
+            </div>
+            <h3 class="text-base font-semibold text-zinc-300">Henüz Video Üretilmedi</h3>
+            <p class="text-xs text-zinc-500 max-w-xs leading-relaxed">Sol taraftaki ayarları yapıp "Videoyu Üret" butonuna bastığınızda durum, ilerleme ve oynatıcı burada görünecektir.</p>
+          </div>
+
+          <!-- İşleme Durumu (Progress) -->
+          <div id="progressState" class="w-full space-y-5 hidden">
+            <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold uppercase tracking-wider" id="jobStatusBadge">
+              Kuyrukta
+            </div>
+            <div class="text-4xl font-extrabold font-mono text-white tracking-tight" id="progressPercentage">0%</div>
+            <!-- Progress Bar -->
+            <div class="w-full bg-zinc-900 rounded-full h-3 overflow-hidden border border-zinc-800">
+              <div id="progressBar" class="bg-gradient-to-r from-amber-500 to-yellow-300 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <p class="text-xs text-zinc-400" id="progressStatusText">İşlem sıraya alınıyor...</p>
+          </div>
+
+          <!-- Video Oynatıcı Durumu -->
+          <div id="videoState" class="w-full space-y-4 hidden">
+            <div class="rounded-xl overflow-hidden border border-zinc-700 shadow-2xl bg-black">
+              <video id="resultVideo" controls autoplay loop class="w-full max-h-[420px] object-contain"></video>
+            </div>
+            <div class="flex items-center justify-between gap-3 pt-2">
+              <span class="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Video Başarıyla Tamamlandı
+              </span>
+              <a id="downloadBtn" href="#" download class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold rounded-xl transition inline-flex items-center gap-2 border border-zinc-700">
+                ⬇ MP4 İndir
+              </a>
+            </div>
+          </div>
+
+          <!-- Hata Durumu -->
+          <div id="errorState" class="w-full p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-red-300 text-xs text-left space-y-1.5 hidden">
+            <div class="font-bold flex items-center gap-1.5 text-red-400">
+              ⚠️ Üretim / API Hatası
+            </div>
+            <div id="errorMsg" class="font-mono text-[11px] break-words whitespace-pre-wrap leading-relaxed"></div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <script>
+    let currentMode = 'keyframe'; // 't2v', 'keyframe', 'reference'
+    let currentJobId = null;
+    let pollTimer = null;
+
+    function setMode(mode) {
+      currentMode = mode;
+      
+      const tabT2v = document.getElementById('tab_t2v');
+      const tabKey = document.getElementById('tab_keyframe');
+      const tabRef = document.getElementById('tab_reference');
+      const keyArea = document.getElementById('keyframeArea');
+      const refArea = document.getElementById('referenceArea');
+      const desc = document.getElementById('modeDescription');
+
+      // Sekme stilleri
+      const activeClass = "py-2.5 text-xs font-bold rounded-lg bg-amber-500 text-zinc-950 shadow transition";
+      const inactiveClass = "py-2.5 text-xs font-bold rounded-lg transition text-zinc-400 hover:text-white";
+
+      tabT2v.className = mode === 't2v' ? activeClass : inactiveClass;
+      tabKey.className = mode === 'keyframe' ? activeClass : inactiveClass;
+      tabRef.className = mode === 'reference' ? activeClass : inactiveClass;
+
+      if (mode === 't2v') {
+        keyArea.classList.add('hidden');
+        refArea.classList.add('hidden');
+        desc.innerText = "Yalnızca metin komutuyla (Prompt) sıfırdan video üretin.";
+      } else if (mode === 'keyframe') {
+        keyArea.classList.remove('hidden');
+        refArea.classList.add('hidden');
+        desc.innerText = "İlk kare veya ilk+son kare resimleri vererek arayı hareketlendirin.";
+      } else if (mode === 'reference') {
+        keyArea.classList.add('hidden');
+        refArea.classList.remove('hidden');
+        desc.innerText = "Referans resimler, kamera hareket videosu ve ses yükleyerek tam kontrollü video üretin.";
+      }
+
+      updatePriceEstimate();
+    }
+
+    function appendPromptTag(tag) {
+      const p = document.getElementById('promptInput');
+      p.value = (p.value ? p.value + " " : "") + tag;
+      p.focus();
+    }
+
+    async function onModelChange() {
+      const model = document.getElementById('modelSelect').value;
+      const apiKey = document.getElementById('apiKeyInput').value.trim();
+
+      if (apiKey) {
+        try {
+          const res = await fetch(`/api/model-info?api_key=${encodeURIComponent(apiKey)}&model=${encodeURIComponent(model)}`);
+          const data = await res.json();
+          if (data.success && data.model_info && data.model_info.info) {
+            const defaults = data.model_info.info.defaults || {};
+            if (defaults.width) document.getElementById('widthInput').value = defaults.width;
+            if (defaults.height) document.getElementById('heightInput').value = defaults.height;
+            if (defaults.frames) document.getElementById('framesInput').value = defaults.frames;
+            if (defaults.fps) document.getElementById('fpsInput').value = defaults.fps;
+            updatePriceEstimate();
+            return;
+          }
+        } catch {}
+      }
+
+      // Fallback
+      if (model.includes('MiniMax')) {
+        document.getElementById('widthInput').value = 1024;
+        document.getElementById('heightInput').value = 576;
+        document.getElementById('framesInput').value = 243;
+      } else {
+        document.getElementById('widthInput').value = 768;
+        document.getElementById('heightInput').value = 512;
+        document.getElementById('framesInput').value = 120;
+      }
+      updatePriceEstimate();
+    }
+
+    async function refreshModelsList() {
+      const apiKey = document.getElementById('apiKeyInput').value.trim();
+      if (!apiKey) {
+        alert("Modelleri listelemek için önce bir API Key girin.");
+        return;
+      }
+      try {
+        const res = await fetch(`/api/models?api_key=${encodeURIComponent(apiKey)}`);
+        const data = await res.json();
+        if (data.success && data.models && data.models.length > 0) {
+          const select = document.getElementById('modelSelect');
+          const currentVal = select.value;
+          select.innerHTML = "";
+          data.models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.slug;
+            opt.innerText = `${m.name || m.slug} (${m.slug})`;
+            if (m.slug === currentVal) opt.selected = true;
+            select.appendChild(opt);
+          });
+        }
+      } catch (e) {
+        console.error("Model refresh error:", e);
+      }
+    }
+
+    function onApiKeyChange() {
+      updatePriceEstimate();
+    }
+
+    async function generateNewAccount() {
+      const btn = document.getElementById('btnCreateAccount');
+      const spinner = document.getElementById('accSpinner');
+      const text = document.getElementById('btnAccText');
+      const status = document.getElementById('accountStatus');
+
+      btn.disabled = true;
+      spinner.classList.remove('hidden');
+      text.innerText = "Hesap Açılıyor...";
+      status.classList.remove('hidden');
+      status.className = "mt-2 text-xs text-amber-400";
+      status.innerText = "Arka plan tarayıcısı aktivasyon çerezini alıyor, lütfen bekleyin...";
+
+      try {
+        const res = await fetch('/api/create-account', { method: 'POST' });
+        const data = await res.json();
+        if (data.success && data.api_key) {
+          document.getElementById('apiKeyInput').value = data.api_key;
+          status.className = "mt-2 text-xs text-emerald-400";
+          status.innerText = "✓ Yeni deAPI hesabı açıldı ve $5.00 ücretsiz bakiye yüklendi!";
+          refreshModelsList();
+          updatePriceEstimate();
+        } else {
+          status.className = "mt-2 text-xs text-red-400";
+          status.innerText = "Hata: " + (data.error || "Hesap açılamadı");
+        }
+      } catch (err) {
+        status.className = "mt-2 text-xs text-red-400";
+        status.innerText = "Bağlantı hatası: " + err.message;
+      } finally {
+        btn.disabled = false;
+        spinner.classList.add('hidden');
+        text.innerText = "+ Otomatik $5 Kredili Hesap Aç";
+      }
+    }
+
+    async function updatePriceEstimate() {
+      const apiKey = document.getElementById('apiKeyInput').value.trim();
+      const display = document.getElementById('costDisplay');
+      if (!apiKey) {
+        display.innerText = "API Key giriniz";
+        return;
+      }
+
+      let refImgCount = 0;
+      let refVidCount = 0;
+      let refAudCount = 0;
+
+      if (currentMode === 'keyframe') {
+        refImgCount = 1;
+        if (document.getElementById('lastFrameInput').files.length > 0) refImgCount = 2;
+      } else if (currentMode === 'reference') {
+        refImgCount = document.getElementById('refImagesInput').files.length;
+        refVidCount = document.getElementById('refVideoInput').files.length;
+        refAudCount = document.getElementById('refAudioInput').files.length;
+      }
+
+      const payload = {
+        api_key: apiKey,
+        model: document.getElementById('modelSelect').value,
+        width: document.getElementById('widthInput').value,
+        height: document.getElementById('heightInput').value,
+        frames: document.getElementById('framesInput').value,
+        fps: document.getElementById('fpsInput').value,
+        steps: document.getElementById('stepsInput').value,
+        is_animation: currentMode !== 't2v',
+        ref_images_count: refImgCount,
+        ref_videos_count: refVidCount,
+        ref_audios_count: refAudCount
+      };
+
+      try {
+        const res = await fetch('/api/estimate-price', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success && data.price_info && data.price_info.price !== undefined) {
+          const isEst = data.price_info.is_estimated ? " (Tahmini)" : " (Kesin Ücret)";
+          display.innerText = `${data.price_info.price} kredi${isEst}`;
+        } else {
+          display.innerText = "Hesaplanamadı";
+        }
+      } catch {
+        display.innerText = "Bağlantı yok";
+      }
+    }
+
+    ['widthInput', 'heightInput', 'framesInput', 'fpsInput', 'stepsInput', 'guidanceInput'].forEach(id => {
+      document.getElementById(id).addEventListener('change', updatePriceEstimate);
+    });
+
+    ['firstFrameInput', 'lastFrameInput', 'refImagesInput', 'refVideoInput', 'refAudioInput'].forEach(id => {
+      document.getElementById(id).addEventListener('change', updatePriceEstimate);
+    });
+
+    async function startGeneration() {
+      const apiKey = document.getElementById('apiKeyInput').value.trim();
+      if (!apiKey) {
+        alert("Lütfen önce bir API Anahtarı girin veya 'Otomatik Hesap Aç' butonuna basın.");
+        return;
+      }
+      const prompt = document.getElementById('promptInput').value.trim();
+      if (!prompt) {
+        alert("Lütfen bir video istemi (prompt) yazın.");
+        return;
+      }
+
+      const btn = document.getElementById('btnGenerate');
+      const spinner = document.getElementById('genSpinner');
+      const text = document.getElementById('btnGenText');
+
+      const formData = new FormData();
+      formData.append('api_key', apiKey);
+      formData.append('prompt', prompt);
+      formData.append('mode', currentMode);
+      formData.append('model', document.getElementById('modelSelect').value);
+      formData.append('width', document.getElementById('widthInput').value);
+      formData.append('height', document.getElementById('heightInput').value);
+      formData.append('frames', document.getElementById('framesInput').value);
+      formData.append('fps', document.getElementById('fpsInput').value);
+      formData.append('seed', document.getElementById('seedInput').value);
+      formData.append('negative_prompt', document.getElementById('negativePromptInput').value);
+      formData.append('enhance_prompt', document.getElementById('enhancePrompt').checked);
+
+      const stepsVal = document.getElementById('stepsInput').value.trim();
+      if (stepsVal) formData.append('steps', stepsVal);
+
+      const guidanceVal = document.getElementById('guidanceInput').value.trim();
+      if (guidanceVal) formData.append('guidance', guidanceVal);
+
+      // Dosyaları ekle
+      if (currentMode === 'keyframe') {
+        const ff = document.getElementById('firstFrameInput').files[0];
+        if (!ff) {
+          alert("Keyframe modunda lütfen en azından bir İlk Kare Resmi seçin.");
+          return;
+        }
+        formData.append('first_frame', ff);
+
+        const lf = document.getElementById('lastFrameInput').files[0];
+        if (lf) formData.append('last_frame', lf);
+
+      } else if (currentMode === 'reference') {
+        const refImgs = document.getElementById('refImagesInput').files;
+        for (let i = 0; i < refImgs.length; i++) {
+          formData.append('ref_images', refImgs[i]);
+        }
+
+        const refVid = document.getElementById('refVideoInput').files[0];
+        if (refVid) formData.append('ref_videos', refVid);
+
+        const refAud = document.getElementById('refAudioInput').files[0];
+        if (refAud) formData.append('ref_audios', refAud);
+
+        if (refImgs.length === 0 && !refVid && !refAud) {
+          alert("Referans modunda lütfen en az 1 referans dosyası yükleyin.");
+          return;
+        }
+
+        if (refAud && refImgs.length === 0 && !refVid) {
+          alert("Ses referansı tek başına kullanılamaz. Yanında en az 1 resim veya video olmalıdır.");
+          return;
+        }
+      }
+
+      btn.disabled = true;
+      spinner.classList.remove('hidden');
+      text.innerText = "Gönderiliyor...";
+
+      // Ekran durumunu güncelle
+      document.getElementById('idleState').classList.add('hidden');
+      document.getElementById('videoState').classList.add('hidden');
+      document.getElementById('errorState').classList.add('hidden');
+      document.getElementById('progressState').classList.remove('hidden');
+      document.getElementById('progressBar').style.width = '10%';
+      document.getElementById('progressPercentage').innerText = '10%';
+      document.getElementById('jobStatusBadge').innerText = 'Kuyruğa Alındı';
+      document.getElementById('progressStatusText').innerText = 'İstek API sunucusuna iletiliyor...';
+
+      try {
+        const res = await fetch('/api/generate', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.success && data.job_id) {
+          currentJobId = data.job_id;
+          startPolling(currentJobId);
+        } else {
+          showError(data.error || "İş başlatılamadı");
+          btn.disabled = false;
+          spinner.classList.add('hidden');
+          text.innerText = "Videoyu Üret";
+        }
+      } catch (err) {
+        showError("Bağlantı hatası: " + err.message);
+        btn.disabled = false;
+        spinner.classList.add('hidden');
+        text.innerText = "Videoyu Üret";
+      }
+    }
+
+    function startPolling(jobId) {
+      if (pollTimer) clearInterval(pollTimer);
+
+      pollTimer = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/job-status/${jobId}`);
+          const data = await res.json();
+          if (data.success && data.job) {
+            const job = data.job;
+            const progress = job.progress || 0;
+            document.getElementById('progressBar').style.width = `${progress}%`;
+            document.getElementById('progressPercentage').innerText = `${progress}%`;
+            document.getElementById('jobStatusBadge').innerText = job.status.toUpperCase();
+
+            if (job.status === 'processing') {
+              document.getElementById('progressStatusText').innerText = "Video kareleri AI tarafından çiziliyor ve renderlanıyor...";
+            } else if (job.status === 'done') {
+              clearInterval(pollTimer);
+              showVideo(job.video_url);
+            } else if (job.status === 'error') {
+              clearInterval(pollTimer);
+              showError(job.error || "Video üretimi başarısız oldu.");
+            }
+          }
+        } catch (err) {
+          console.error("Polling error:", err);
+        }
+      }, 3000);
+    }
+
+    function showVideo(url) {
+      document.getElementById('progressState').classList.add('hidden');
+      document.getElementById('videoState').classList.remove('hidden');
+      const v = document.getElementById('resultVideo');
+      v.src = url;
+      v.load();
+      v.play();
+      document.getElementById('downloadBtn').href = url;
+
+      const btn = document.getElementById('btnGenerate');
+      btn.disabled = false;
+      document.getElementById('genSpinner').classList.add('hidden');
+      document.getElementById('btnGenText').innerText = "Yeni Video Üret";
+    }
+
+    function showError(msg) {
+      document.getElementById('progressState').classList.add('hidden');
+      document.getElementById('errorState').classList.remove('hidden');
+      document.getElementById('errorMsg').innerText = msg;
+
+      const btn = document.getElementById('btnGenerate');
+      btn.disabled = false;
+      document.getElementById('genSpinner').classList.add('hidden');
+      document.getElementById('btnGenText').innerText = "Videoyu Üret";
+    }
+  </script>
+</body>
+</html>
