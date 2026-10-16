@@ -29,26 +29,76 @@ def random_password():
     chars = string.ascii_letters + string.digits
     return "DeApi#" + "".join(secrets.choice(chars) for _ in range(8)) + "1"
 
-def create_new_account_key(browser_manager) -> str:
-    """
-    Tarayıcıdan alınan oturum ve proxy ile curl_cffi kullanarak
-    yeni bir hesap açar ve $5 kredili API anahtarını döndürür.
-    """
-    print("[*] Yeni hesap oluşturma süreci başlatılıyor...", flush=True)
-    session_data = browser_manager.get_fresh_session()
-    cookies = session_data["cookies"]
-    ua = session_data["user_agent"]
-    register_html = session_data["html"]
+CACHED_SESSION = {
+    "cf_cookies": {},
+    "user_agent": None,
+    "timestamp": 0
+}
 
-    # curl_cffi oturumu: Cloudflare cf_clearance ile aynı proxy'yi kullanır
+def get_registration_page(browser_manager):
+    """
+    Öncelikle mevcut cf_clearance çereziyle doğrudan curl_cffi üzerinden
+    hızlıca /register sayfasını çekmeyi dener. Eğer Cloudflare engeli gelirse
+    veya süresi dolmuşsa arka plan tarayıcısından yeni bir Turnstile oturumu alır.
+    """
+    global CACHED_SESSION
+    now = time.time()
+    
+    # Eğer önbellekte cf_cookies varsa ve 35 dakikadan yeniyse doğrudan dene
+    if CACHED_SESSION.get("cf_cookies") and CACHED_SESSION.get("user_agent") and (now - CACHED_SESSION.get("timestamp", 0) < 2100):
+        try:
+            print("[*] Mevcut cf_clearance önbelleği kontrol ediliyor (Hızlı Mod)...", flush=True)
+            fast_session = cffi_requests.Session(impersonate="chrome120")
+            if browser_manager.proxy:
+                fast_session.proxies = {"http": browser_manager.proxy, "https": browser_manager.proxy}
+            fast_session.cookies.update(CACHED_SESSION["cf_cookies"])
+            fast_session.headers.update({
+                "user-agent": CACHED_SESSION["user_agent"],
+                "accept-language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+            })
+            r = fast_session.get(f"{APP_URL}/register", timeout=15)
+            if r.status_code == 200 and "wire:snapshot" in r.text and "csrf-token" in r.text and "Just a moment" not in r.text:
+                print("[+] Mevcut cf_clearance hâlâ aktif! Tarayıcı açılmadan 1 saniyede kayıt formu alındı.", flush=True)
+                return fast_session, r.text, CACHED_SESSION["user_agent"]
+        except Exception as fast_err:
+            print(f"[*] Hızlı kontrol hatası: {fast_err}", flush=True)
+
+    # Önbellek yoksa veya bayatlamışsa / hata vermişse tarayıcıdan taze Turnstile oturumu al
+    print("[*] cf_clearance süresi dolmuş veya mevcut değil. Arka plan tarayıcısıyla yeni oturum alınıyor...", flush=True)
+    session_data = browser_manager.get_fresh_session()
+    raw_cookies = session_data["cookies"]
+    ua = session_data["user_agent"]
+    html_content = session_data["html"]
+
+    # Sadece Cloudflare çerezlerini önbellekte tut, eski kullanıcı session çerezlerini at
+    cf_cookies = {k: v for k, v in raw_cookies.items() if "cf" in k.lower()}
+    if not cf_cookies:
+        cf_cookies = raw_cookies
+
+    CACHED_SESSION = {
+        "cf_cookies": cf_cookies,
+        "user_agent": ua,
+        "timestamp": time.time()
+    }
+
     session = cffi_requests.Session(impersonate="chrome120")
     if browser_manager.proxy:
         session.proxies = {"http": browser_manager.proxy, "https": browser_manager.proxy}
-    session.cookies.update(cookies)
+    session.cookies.update(raw_cookies)
     session.headers.update({
         "user-agent": ua,
         "accept-language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
     })
+
+    return session, html_content, ua
+
+def create_new_account_key(browser_manager) -> str:
+    """
+    Önbellekteki veya tarayıcıdan taze alınan cf_clearance ile
+    hızlıca yeni bir hesap açar ve $5 kredili API anahtarını döndürür.
+    """
+    print("[*] Yeni hesap oluşturma süreci başlatılıyor...", flush=True)
+    session, register_html, ua = get_registration_page(browser_manager)
 
     soup = BeautifulSoup(register_html, "html.parser")
     csrf_elem = soup.find("meta", {"name": "csrf-token"})
@@ -94,6 +144,7 @@ def create_new_account_key(browser_manager) -> str:
     }
     r_post = session.post(update_uri, json=payload, headers=lw_headers)
     if r_post.status_code != 200:
+        CACHED_SESSION["timestamp"] = 0
         raise RuntimeError(f"Kayıt isteği başarısız: HTTP {r_post.status_code}")
 
     # 2. Doğrulama e-postasını bekle (od2.in)
