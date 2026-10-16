@@ -46,6 +46,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Playwright Chromium bağımlılıklarını doğrula
 RUN playwright install chromium || true
 
+RUN python -c "import cloakbrowser; cloakbrowser.ensure_binary()"
+
 # Uygulama kodlarını kopyala
 COPY . .
 
