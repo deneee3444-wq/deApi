@@ -165,10 +165,13 @@ def _background_job_worker(job_id, api_key, payload, file_paths):
 
             calc_progress = max(10.0, min(95.0, float(progress)))
             JOBS[job_id]["progress"] = round(calc_progress, 1)
-            JOBS[job_id]["status"] = status
 
             if status == "done":
-                # deAPI CDN / S3 yükleme gecikmesi için result_url dolana kadar en fazla 24 saniye bekle
+                # deAPI üretimi tamamladı; video sunucuya indirilene kadar durumu 'downloading' yap
+                JOBS[job_id]["status"] = "downloading"
+                JOBS[job_id]["progress"] = 98.0
+
+                # deAPI CDN / S3 yükleme gecikmesi için result_url dolana kadar bekle
                 result_url = _extract_url(info)
                 retries = 0
                 while not result_url and retries < 12:
@@ -181,10 +184,12 @@ def _background_job_worker(job_id, api_key, payload, file_paths):
                     filename = f"video_{request_id[:8]}_{int(time.time())}.mp4"
                     save_path = os.path.join(OUTPUTS_DIR, filename)
                     deapi_engine.download_video_file(result_url, save_path)
-                    JOBS[job_id]["status"] = "done"
-                    JOBS[job_id]["progress"] = 100.0
+                    
+                    # Dosya tam indirildi ve hazır -> Sadece şimdi 'done' yap!
                     JOBS[job_id]["video_url"] = f"/outputs/{filename}"
                     JOBS[job_id]["filename"] = filename
+                    JOBS[job_id]["progress"] = 100.0
+                    JOBS[job_id]["status"] = "done"
                 else:
                     JOBS[job_id]["status"] = "error"
                     JOBS[job_id]["error"] = "Video üretildi fakat indirme bağlantısı (result_url) CDN tarafından zamanında sağlanamadı."
@@ -193,6 +198,8 @@ def _background_job_worker(job_id, api_key, payload, file_paths):
                 JOBS[job_id]["status"] = "error"
                 JOBS[job_id]["error"] = f"{info.get('error_code', 'ERROR')}: {info.get('error_reason', 'Bilinmeyen hata')}"
                 break
+            else:
+                JOBS[job_id]["status"] = status
 
     except Exception as e:
         JOBS[job_id]["status"] = "error"
