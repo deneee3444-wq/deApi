@@ -103,13 +103,7 @@ def api_estimate_price():
         "frames": int(data.get("frames", 243)),
         "fps": int(data.get("fps", 24)),
     }
-    steps = data.get("steps")
-    if steps is not None and str(steps).strip() != "":
-        try:
-            payload["steps"] = int(steps)
-        except (ValueError, TypeError):
-            pass
-    elif "ltxv" in payload["model"].lower():
+    if "ltxv" in payload["model"].lower():
         payload["steps"] = 1
 
     is_animation = bool(data.get("is_animation", False))
@@ -249,21 +243,8 @@ def api_generate():
     if negative_prompt:
         payload["negative_prompt"] = negative_prompt
 
-    steps_val = request.form.get("steps", "").strip()
-    if steps_val:
-        try:
-            payload["steps"] = int(steps_val)
-        except ValueError:
-            pass
-    elif "ltxv" in model.lower():
+    if "ltxv" in model.lower():
         payload["steps"] = 1
-
-    guidance_val = request.form.get("guidance", "").strip()
-    if guidance_val:
-        try:
-            payload["guidance"] = float(guidance_val)
-        except ValueError:
-            pass
 
     enhance = request.form.get("enhance_prompt", "false").lower() == "true"
     if enhance:
@@ -355,3 +336,14 @@ def api_generate():
 def api_job_status(job_id):
     job = JOBS.get(job_id)
     if not job:
+        return jsonify({"success": False, "error": "İş bulunamadı"}), 404
+    return jsonify({"success": True, "job": job})
+
+@app.route("/outputs/<path:filename>")
+def serve_output(filename):
+    return send_from_directory(OUTPUTS_DIR, filename)
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    print(f"[*] deAPI Web Studio başlatıldı: http://0.0.0.0:{port}", flush=True)
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
