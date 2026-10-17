@@ -109,6 +109,8 @@ def api_estimate_price():
             payload["steps"] = int(steps)
         except (ValueError, TypeError):
             pass
+    elif "ltxv" in payload["model"].lower():
+        payload["steps"] = 1
 
     is_animation = bool(data.get("is_animation", False))
     ref_counts = {
@@ -253,6 +255,8 @@ def api_generate():
             payload["steps"] = int(steps_val)
         except ValueError:
             pass
+    elif "ltxv" in model.lower():
+        payload["steps"] = 1
 
     guidance_val = request.form.get("guidance", "").strip()
     if guidance_val:
@@ -351,14 +355,3 @@ def api_generate():
 def api_job_status(job_id):
     job = JOBS.get(job_id)
     if not job:
-        return jsonify({"success": False, "error": "İş bulunamadı"}), 404
-    return jsonify({"success": True, "job": job})
-
-@app.route("/outputs/<path:filename>")
-def serve_output(filename):
-    return send_from_directory(OUTPUTS_DIR, filename)
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    print(f"[*] deAPI Web Studio başlatıldı: http://0.0.0.0:{port}", flush=True)
-    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
