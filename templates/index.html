@@ -469,6 +469,7 @@
             if (defaults.height) document.getElementById('heightInput').value = defaults.height;
             if (defaults.frames) document.getElementById('framesInput').value = defaults.frames;
             if (defaults.fps) document.getElementById('fpsInput').value = defaults.fps;
+            document.getElementById('stepsInput').value = (defaults.steps !== undefined && defaults.steps !== null) ? defaults.steps : '';
             updatePriceEstimate();
             return;
           }
@@ -478,9 +479,15 @@
       if (model.includes('MiniMax')) {
         setResolution(1024, 576);
         document.getElementById('framesInput').value = 243;
+        document.getElementById('stepsInput').value = '';
+      } else if (model.includes('Ltxv')) {
+        setResolution(512, 512);
+        document.getElementById('framesInput').value = 120;
+        document.getElementById('stepsInput').value = '1';
       } else {
         setResolution(768, 512);
         document.getElementById('framesInput').value = 120;
+        document.getElementById('stepsInput').value = '';
       }
       updatePriceEstimate();
     }
