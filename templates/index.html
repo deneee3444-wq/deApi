@@ -367,7 +367,7 @@
             renderJobHistory(data.jobs);
             // Eğer en son görev devam ediyorsa polling'e devam et
             const latest = data.jobs[0];
-            if (latest.status === 'processing' || latest.status === 'queued' || latest.status === 'submitting') {
+            if (latest.status === 'processing' || latest.status === 'queued' || latest.status === 'submitting' || latest.status === 'downloading') {
               currentJobId = latest.id;
               showProgressState();
               startPolling(latest.id);
@@ -732,10 +732,17 @@
 
             if (job.status === 'processing' || job.status === 'submitting') {
               document.getElementById('progressStatusText').innerText = "Video kareleri üretiliyor...";
+            } else if (job.status === 'downloading') {
+              document.getElementById('progressStatusText').innerText = "Video sunucuya indiriliyor ve oynatıcı hazırlanıyor...";
             } else if (job.status === 'done') {
-              clearInterval(pollTimer);
-              showVideo(job.video_url);
-              refreshJobHistory();
+              // Video URL tam hazır olmadan polling'i durdurma
+              if (job.video_url && typeof job.video_url === 'string' && job.video_url.trim() !== '') {
+                clearInterval(pollTimer);
+                showVideo(job.video_url);
+                refreshJobHistory();
+              } else {
+                document.getElementById('progressStatusText').innerText = "Video bağlantısı bekleniyor...";
+              }
             } else if (job.status === 'error') {
               clearInterval(pollTimer);
               showError(job.error || "Video üretimi başarısız oldu.");
@@ -749,6 +756,8 @@
     }
 
     function showVideo(url) {
+      if (!url || typeof url !== 'string' || !url.trim()) return;
+
       document.getElementById('progressState').classList.add('hidden');
       document.getElementById('errorState').classList.add('hidden');
       document.getElementById('videoState').classList.remove('hidden');
@@ -756,7 +765,9 @@
       const v = document.getElementById('resultVideo');
       // Otomatik ses kapalı garantisi
       v.muted = true;
-      v.src = url;
+      const separator = url.includes('?') ? '&' : '?';
+      const playUrl = `${url}${separator}t=${Date.now()}`;
+      v.src = playUrl;
       v.load();
       v.play().catch(() => {});
       
@@ -834,6 +845,8 @@
           statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">TAMAM</span>';
         } else if (j.status === 'error') {
           statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20">HATA</span>';
+        } else if (j.status === 'downloading') {
+          statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20 animate-pulse">İNDİRİLİYOR</span>';
         } else {
           statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse">İŞLENİYOR</span>';
         }
@@ -851,7 +864,7 @@
         item.onclick = () => {
           if (j.status === 'done' && j.video_url) {
             showVideo(j.video_url);
-          } else if (j.status === 'processing' || j.status === 'queued') {
+          } else if (j.status === 'processing' || j.status === 'queued' || j.status === 'submitting' || j.status === 'downloading') {
             currentJobId = j.id;
             showProgressState();
             startPolling(j.id);
