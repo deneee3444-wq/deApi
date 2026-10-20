@@ -1,5 +1,40 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+================================================================================
+🎬 deAPI Web Video Studio (Flask) 🎬
+================================================================================
+deAPI VİDEO KURALLARI & NORMALİZASYON DEĞERLERİ (ÖZET REFERANS):
+--------------------------------------------------------------------------------
+1. FPS Kuralı:
+   - Kesinlikle ve sadece 24 FPS zorunludur (MiniMax & LTX 2.5).
+   - 5 Saniye: MiniMax = 124 kare, LTX 2.5 = 120 kare.
+   - 10 Saniye: MiniMax = 243 kare, LTX 2.5 = 241 kare.
+
+2. Çözünürlük ve Boyut Sınırları:
+   - Maksimum kenar: 1344 px.
+   - Maksimum piksel alanı: 1344 x 768 = 1.032.192 px (bu alanı aşamaz).
+   - Normalizasyon Değerleri (768p Standart):
+     * 16:9 -> 1344 x 768 (veya 1024 x 576)
+     * 9:16 -> 768 x 1344 (veya 576 x 1024)
+     * 1:1  -> 768 x 768
+     * 4:3  -> 1024 x 768
+     * 3:4  -> 768 x 1024
+     * 21:9 -> 1344 x 576
+
+3. Model Limitleri & RPD (Requests Per Day):
+   - Hız Sınırı: Her iki modelde de 1 RPM (dakikada 1 istek).
+   - MiniMax H3: RPD = 3 (Hesap başına günlük 3 video).
+   - LTX 2.5:    RPD = 15 (Hesap başına günlük 15 video), payload'da steps: 1 zorunludur.
+
+4. Medya Referans Kuralları:
+   - MiniMax H3: En fazla 3 referans medya (görsel + video + ses <= 3).
+     * Görsel maks 3 (ref_images[0..2]), Video maks 1 (ref_videos[0]), Ses maks 1 (ref_audios[0]).
+     * Ses referansı tek başına verilemez (yanında en az 1 görsel veya video şart).
+   - LTX 2.5: Sadece Start veya Start+End Keyframe kabul eder. Harici ses veya video referansı almaz.
+   - Keyframe modu (first_frame_image / last_frame_image) ile Full-Reference modu birbirini dışlar.
+================================================================================
+"""
 
 import os
 import sys
@@ -98,10 +133,10 @@ def api_estimate_price():
 
     payload = {
         "model": data.get("model", "MiniMaxH3_33B_Turbo_INT8"),
-        "width": int(data.get("width", 1024)),
-        "height": int(data.get("height", 576)),
-        "frames": int(data.get("frames", 243)),
-        "fps": int(data.get("fps", 24)),
+        "width": int(data.get("width", 1344)),
+        "height": int(data.get("height", 768)),
+        "frames": int(data.get("frames", 124)),
+        "fps": 24, # deAPI'de daima ve sadece 24 FPS zorunludur
     }
     if "ltxv" in payload["model"].lower():
         payload["steps"] = 1
@@ -215,10 +250,10 @@ def api_generate():
 
     mode = request.form.get("mode", "t2v")
     model = request.form.get("model", "MiniMaxH3_33B_Turbo_INT8")
-    width = int(request.form.get("width", 1024))
-    height = int(request.form.get("height", 576))
-    frames = int(request.form.get("frames", 243))
-    fps = int(request.form.get("fps", 24))
+    width = int(request.form.get("width", 1344))
+    height = int(request.form.get("height", 768))
+    frames = int(request.form.get("frames", 124))
+    fps = 24 # deAPI'de daima ve sadece 24 FPS zorunludur
 
     seed_val = request.form.get("seed", "-1").strip()
     if seed_val and seed_val != "-1":
