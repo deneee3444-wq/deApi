@@ -1,5 +1,40 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+================================================================================
+🎬 deAPI Engine (Web Edition) 🎬
+================================================================================
+deAPI VİDEO KURALLARI & NORMALİZASYON DEĞERLERİ (ÖZET REFERANS):
+--------------------------------------------------------------------------------
+1. FPS Kuralı:
+   - Kesinlikle ve sadece 24 FPS zorunludur (MiniMax & LTX 2.5).
+   - 5 Saniye: MiniMax = 124 kare, LTX 2.5 = 120 kare.
+   - 10 Saniye: MiniMax = 243 kare, LTX 2.5 = 241 kare.
+
+2. Çözünürlük ve Boyut Sınırları:
+   - Maksimum kenar: 1344 px.
+   - Maksimum piksel alanı: 1344 x 768 = 1.032.192 px (bu alanı aşamaz).
+   - Normalizasyon Değerleri (768p Standart):
+     * 16:9 -> 1344 x 768 (veya 1024 x 576)
+     * 9:16 -> 768 x 1344 (veya 576 x 1024)
+     * 1:1  -> 768 x 768
+     * 4:3  -> 1024 x 768
+     * 3:4  -> 768 x 1024
+     * 21:9 -> 1344 x 576
+
+3. Model Limitleri & RPD (Requests Per Day):
+   - Hız Sınırı: Her iki modelde de 1 RPM (dakikada 1 istek).
+   - MiniMax H3: RPD = 3 (Hesap başına günlük 3 video).
+   - LTX 2.5:    RPD = 15 (Hesap başına günlük 15 video), payload'da steps: 1 zorunludur.
+
+4. Medya Referans Kuralları:
+   - MiniMax H3: En fazla 3 referans medya (görsel + video + ses <= 3).
+     * Görsel maks 3 (ref_images[0..2]), Video maks 1 (ref_videos[0]), Ses maks 1 (ref_audios[0]).
+     * Ses referansı tek başına verilemez (yanında en az 1 görsel veya video şart).
+   - LTX 2.5: Sadece Start veya Start+End Keyframe kabul eder. Harici ses veya video referansı almaz.
+   - Keyframe modu (first_frame_image / last_frame_image) ile Full-Reference modu birbirini dışlar.
+================================================================================
+"""
 
 import os
 import re
@@ -110,7 +145,14 @@ def create_new_account_key(browser_manager) -> str:
     if not elem:
         raise RuntimeError("Kayıt sayfasında Livewire snapshot bulunamadı.")
     raw_snapshot = elem["wire:snapshot"]
-    update_uri = re.search(r'data-update-uri="([^"]+)"', register_html).group(1)
+    lw_script = soup.find("script", attrs={"data-update-uri": True})
+    if lw_script:
+        update_uri = lw_script["data-update-uri"]
+        csrf_token = lw_script.get("data-csrf") or csrf_token
+    else:
+        update_uri = re.search(r'data-update-uri="([^"]+)"', register_html).group(1)
+    if update_uri.startswith("/"):
+        update_uri = APP_URL + update_uri
 
     box = random_box()
     email = f"{box}@tm.od2.in"
@@ -180,7 +222,8 @@ def create_new_account_key(browser_manager) -> str:
                         if not match:
                             match = re.search(r'https?://[^\s"\'<>]*verify-email[^\s"\'<>]*', content)
                         if match:
-                            verify_url = html.unescape(match.group(0))
+                            raw_url = html.unescape(match.group(0))
+                            verify_url = raw_url.rstrip("])}>.,;\"'")
                             print(f"[+] Doğrulama linki bulundu: {verify_url}", flush=True)
                             break
                     except Exception as sub_err:
@@ -202,13 +245,22 @@ def create_new_account_key(browser_manager) -> str:
     print("[+] API Keys sayfasından anahtar talep ediliyor...", flush=True)
     r_keys = session.get(f"{APP_URL}/settings/api-keys")
     soup_keys = BeautifulSoup(r_keys.text, "html.parser")
-    csrf_keys = soup_keys.find("meta", {"name": "csrf-token"}).get("content")
+    
+    lw_keys_script = soup_keys.find("script", attrs={"data-update-uri": True})
+    if lw_keys_script:
+        update_uri_keys = lw_keys_script["data-update-uri"]
+        csrf_keys = lw_keys_script.get("data-csrf") or soup_keys.find("meta", {"name": "csrf-token"}).get("content")
+    else:
+        csrf_keys = soup_keys.find("meta", {"name": "csrf-token"}).get("content")
+        update_uri_keys = re.search(r'data-update-uri="([^"]+)"', r_keys.text).group(1)
+    if update_uri_keys.startswith("/"):
+        update_uri_keys = APP_URL + update_uri_keys
+
     elem_keys = soup_keys.find("section", {"wire:name": "settings.api-keys"})
     if not elem_keys:
         elem_keys = soup_keys.find(attrs={"wire:snapshot": True})
 
     raw_snap_keys = elem_keys["wire:snapshot"]
-    update_uri_keys = re.search(r'data-update-uri="([^"]+)"', r_keys.text).group(1)
 
     key_payload = {
         "_token": csrf_keys,
@@ -289,13 +341,11 @@ def estimate_price(api_key: str, is_animation: bool, payload: dict, ref_counts: 
         "width": int(payload["width"]),
         "height": int(payload["height"]),
         "frames": int(payload["frames"]),
-        "fps": int(payload["fps"]),
+        "fps": 24, # deAPI'de daima ve sadece 24 FPS zorunludur
     }
-    if payload.get("steps") is not None:
-        try:
-            price_payload["steps"] = int(payload["steps"])
-        except (ValueError, TypeError):
-            pass
+    model_slug = payload.get("model", "")
+    if "ltxv" in model_slug.lower():
+        price_payload["steps"] = 1
 
     if is_animation:
         price_payload["ref_images_count"] = int(ref_counts.get("images", 0))
@@ -315,6 +365,13 @@ def submit_video_job(api_key: str, payload: dict, file_paths: dict) -> dict:
     Video üretim isteğini API'ye iletir (Text-to-Video JSON veya Animation Multipart).
     Tüm referans ve keyframe kurallarını eksiksiz uygular.
     """
+    payload["fps"] = 24 # deAPI'de daima ve sadece 24 FPS zorunludur
+    model_slug = payload.get("model", "")
+    if "ltxv" in model_slug.lower():
+        payload["steps"] = 1
+    else:
+        payload.pop("steps", None)
+
     has_keyframes = bool(file_paths.get("first_frame") or file_paths.get("last_frame"))
     has_refs = bool(file_paths.get("ref_images") or file_paths.get("ref_videos") or file_paths.get("ref_audios"))
 
